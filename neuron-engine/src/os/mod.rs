@@ -4,6 +4,7 @@ pub mod window;
 
 #[cfg(target_os="linux")]
 mod x11;
+mod windows;
 
 use std::sync::{Arc, Weak};
 use crate::os::window::{SupportedWindowAttributes, Window, WindowAttributes, WindowId, WindowManager};
