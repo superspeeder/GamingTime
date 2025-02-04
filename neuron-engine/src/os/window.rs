@@ -2,11 +2,11 @@
 
 use crate::os::Platform;
 use hashbrown::HashMap;
+use log::debug;
 use raw_window_handle::HasWindowHandle;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
-use log::debug;
 
 /// Generic access to a window.
 /// Also requires [`raw_window_handle::HasWindowHandle`] to be implemented.
@@ -163,26 +163,57 @@ impl WindowManager {
 
         let weakref = Arc::downgrade(&window);
 
-        _ = self.window_sets.borrow_mut().active_windows.insert(id, window);
+        _ = self
+            .window_sets
+            .borrow_mut()
+            .active_windows
+            .insert(id, window);
 
         Ok((id, weakref))
     }
 
     pub fn begin_closing_window(&self, id: WindowId) {
         if let Some(window) = self.window_sets.borrow_mut().active_windows.remove(&id) {
-            self.window_sets.borrow_mut().dying_windows.insert(id, window);
+            self.window_sets
+                .borrow_mut()
+                .dying_windows
+                .insert(id, window);
         }
     }
 
     pub fn try_finish_closing_window(&self, id: WindowId) -> bool {
         if let Some(window) = self.window_sets.borrow_mut().dying_windows.remove(&id) {
             if Arc::strong_count(&window) > 1 {
-                debug!("Cannot finish close window {:?}: There are still outside references to this window.", id);
-                self.window_sets.borrow_mut().dying_windows.insert(id, window);
+                debug!(
+                    "Cannot finish close window {:?}: There are still outside references to this window.",
+                    id
+                );
+                self.window_sets
+                    .borrow_mut()
+                    .dying_windows
+                    .insert(id, window);
                 return false;
             }
         }
 
         true
+    }
+
+    pub fn get_window(&self, id: WindowId) -> Option<Arc<dyn Window>> {
+        self.window_sets.borrow().active_windows.get(&id).cloned()
+    }
+
+    pub fn is_window_active(&self, id: WindowId) -> bool {
+        self.window_sets.borrow().active_windows.contains_key(&id)
+    }
+
+    /// Is a window alive? (meaning: is a window either active or dying, but not dead)
+    pub fn is_window_alive(&self, id: WindowId) -> bool {
+        self.window_sets.borrow().active_windows.contains_key(&id)
+            || self.window_sets.borrow().dying_windows.contains_key(&id)
+    }
+
+    pub fn is_window_dying(&self, id: WindowId) -> bool {
+        self.window_sets.borrow().dying_windows.contains_key(&id)
     }
 }
