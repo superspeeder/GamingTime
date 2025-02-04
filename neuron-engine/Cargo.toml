@@ -1,0 +1,23 @@
+[package]
+name = "neuron-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4.22"
+cgmath = "0.18.0"
+anyhow = { version = "1.0.95", features = ["backtrace"] }
+thiserror = "2.0.11"
+rand = "0.9.0"
+serde = "1.0.217"
+bytemuck = "1.21.0"
+pollster = "0.4.0"
+raw-window-handle = "0.6.2"
+hashbrown = "0.15.2"
+
+[target.'cfg(target_os="windows")'.dependencies]
+windows = { version = "0.58.0", features = ["Win32_System", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Foundation", "UI_ViewManagement", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm"] }
+widestring = "1.1.0"
+
+[target.'cfg(target_os="linux")'.dependencies]
+x11-dl = "2.21.0"

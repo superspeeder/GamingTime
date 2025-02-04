@@ -1,23 +1,19 @@
 use std::sync::Arc;
 use cgmath::Vector2;
-use widestring::U16CString;
 use crate::engine::Engine;
-
-pub mod window;
-pub mod event;
+use crate::engine::os::linux::X11Platform;
 
 #[cfg(target_os="windows")]
 mod windows;
+mod linux;
+mod event_handlers;
+mod window;
 
 pub struct WindowAttributes {
     pub title: String,
     pub size: Option<Vector2<i32>>,
     pub position: Option<Vector2<i32>>,
     pub no_close_button: bool,
-}
-
-pub trait Window {
-
 }
 
 pub trait Platform {
@@ -41,3 +37,12 @@ pub trait OsEventHandler {
     fn on_close_request(&mut self, window_id: u32, engine: &Arc<Engine>) -> bool;
 }
 
+#[cfg(not(any(target_os="windows", target_os="linux")))]
+pub(super) fn create_platform() -> anyhow::Result<Arc<dyn Platform>> {
+    unimplemented!()
+}
+
+#[cfg(target_os="linux")]
+pub(super) fn create_platform() -> anyhow::Result<Arc<dyn Platform>> {
+    Ok(Arc::new(X11Platform::new()?))
+}

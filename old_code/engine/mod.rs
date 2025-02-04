@@ -1,4 +1,3 @@
-use crate::engine::os::window::Window;
 use log::{debug, info};
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
@@ -6,27 +5,15 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use widestring::{U16CStr, U16CString};
-use windows::UI::ViewManagement::{UIColorType, UISettings};
-use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, WPARAM};
-use windows::Win32::Graphics::Gdi::{CreateSolidBrush, HBRUSH, RGBQUAD};
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, GetMessageW, MSG, PM_REMOVE, PeekMessageW, RegisterClassExW,
-    TranslateMessage, UnregisterClassW, WM_CLOSE, WNDCLASSEXW,
-};
-use windows::core::PCWSTR;
-use crate::engine::os::event::OsEventHandler;
+use crate::engine::os::{Platform, Window};
 
 pub mod os;
 
 pub struct EngineState {
-    active_windows: HashMap<u32, Arc<Window>>,
-    dying_windows: HashMap<u32, Arc<Window>>,
+    active_windows: HashMap<u32, Arc<dyn Window>>,
+    dying_windows: HashMap<u32, Arc<dyn Window>>,
     window_id_counter: AtomicU32,
-    windows_hinstance: HINSTANCE,
-    window_class_id_counter: AtomicU32,
-    pub hbrush_background: HBRUSH,
+    platform: Arc<dyn Platform>,
 }
 
 pub struct Engine {
@@ -58,88 +45,88 @@ impl Engine {
         self.app.borrow_mut()
     }
 
-    pub fn simple_message_loop(engine: Arc<Engine>) {
-        let mut message: MaybeUninit<MSG> = MaybeUninit::uninit();
-
-        unsafe {
-            loop {
-                while PeekMessageW(
-                    message.as_mut_ptr(),
-                    HWND(std::ptr::null_mut()),
-                    0,
-                    0,
-                    PM_REMOVE,
-                )
-                .0 != 0
-                {
-                    DispatchMessageW(message.as_ptr());
-                    _ = TranslateMessage(message.as_ptr());
-                }
-
-                engine.update();
-
-                if !engine.borrow().any_windows_remaining() {
-                    break;
-                }
-            }
-        }
-    }
+    // pub fn simple_message_loop(engine: Arc<Engine>) {
+    //     let mut message: MaybeUninit<MSG> = MaybeUninit::uninit();
+    //
+    //     unsafe {
+    //         loop {
+    //             while PeekMessageW(
+    //                 message.as_mut_ptr(),
+    //                 HWND(std::ptr::null_mut()),
+    //                 0,
+    //                 0,
+    //                 PM_REMOVE,
+    //             )
+    //             .0 != 0
+    //             {
+    //                 DispatchMessageW(message.as_ptr());
+    //                 _ = TranslateMessage(message.as_ptr());
+    //             }
+    //
+    //             engine.update();
+    //
+    //             if !engine.borrow().any_windows_remaining() {
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // }
 
     pub fn update(self: &Arc<Engine>) {
         self.borrow_mut().finish_killing_windows();
     }
 
-    pub fn recv_window_event(
-        self: &Arc<Self>,
-        window_id: u32,
-        hwnd: HWND,
-        message: u32,
-        wparam: WPARAM,
-        lparam: LPARAM,
-    ) -> Option<isize> {
-        match message {
-            WM_CLOSE => {
-                if self.state.borrow().is_window_active(&window_id) {
-                    if self.app.borrow_mut().on_close_request(window_id, self) {
-                        self.state.borrow_mut().begin_kill_window(window_id);
-                    }
-                }
+    // pub fn recv_window_event(
+    //     self: &Arc<Self>,
+    //     window_id: u32,
+    //     hwnd: HWND,
+    //     message: u32,
+    //     wparam: WPARAM,
+    //     lparam: LPARAM,
+    // ) -> Option<isize> {
+    //     match message {
+    //         WM_CLOSE => {
+    //             if self.state.borrow().is_window_active(&window_id) {
+    //                 if self.app.borrow_mut().on_close_request(window_id, self) {
+    //                     self.state.borrow_mut().begin_kill_window(window_id);
+    //                 }
+    //             }
+    //
+    //             Some(0)
+    //         }
+    //         _ => None,
+    //     }
+    // }
 
-                Some(0)
-            }
-            _ => None,
-        }
-    }
+
 }
 
 impl EngineState {
     pub fn new() -> anyhow::Result<Self> {
-        let windows_hinstance = unsafe { HINSTANCE(GetModuleHandleW(PCWSTR::null())?.0) };
-
-        let window_color = unsafe {
-            let settings = UISettings::new()?;
-            settings.GetColorValue(UIColorType::Background)?
-        };
-
-        let hbrush_background = unsafe {
-            info!(
-                "color: rgba({:?}, {:?}, {:?}, {:?})",
-                window_color.R, window_color.G, window_color.B, window_color.A
-            );
-            CreateSolidBrush(COLORREF(
-                ((window_color.B as u32) << 16)
-                    | ((window_color.G as u32) << 8)
-                    | (window_color.R as u32),
-            ))
-        };
+        // let windows_hinstance = unsafe { HINSTANCE(GetModuleHandleW(PCWSTR::null())?.0) };
+        //
+        // let window_color = unsafe {
+        //     let settings = UISettings::new()?;
+        //     settings.GetColorValue(UIColorType::Background)?
+        // };
+        //
+        // let hbrush_background = unsafe {
+        //     info!(
+        //         "color: rgba({:?}, {:?}, {:?}, {:?})",
+        //         window_color.R, window_color.G, window_color.B, window_color.A
+        //     );
+        //     CreateSolidBrush(COLORREF(
+        //         ((window_color.B as u32) << 16)
+        //             | ((window_color.G as u32) << 8)
+        //             | (window_color.R as u32),
+        //     ))
+        // };
 
         Ok(Self {
             active_windows: HashMap::new(),
             dying_windows: HashMap::new(),
             window_id_counter: AtomicU32::new(0),
-            windows_hinstance,
-            window_class_id_counter: AtomicU32::new(0),
-            hbrush_background,
+            platform: os::create_platform(),
         })
     }
 
