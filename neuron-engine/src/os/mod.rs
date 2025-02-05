@@ -4,11 +4,13 @@ pub mod window;
 
 #[cfg(target_os="linux")]
 mod x11;
+
+#[cfg(windows)]
 mod windows;
 
-use std::sync::{Arc, Weak};
 use crate::os::window::{SupportedWindowAttributes, Window, WindowAttributes, WindowId, WindowManager};
 use raw_window_handle::HasDisplayHandle;
+use std::sync::Arc;
 
 /// Generic access to platform specific functions.
 /// Also requires [`raw_window_handle::HasDisplayHandle`] to be implemented.
@@ -73,15 +75,15 @@ pub mod names {
 }
 
 
-pub fn new_platform(window_manager: Arc<WindowManager>) -> anyhow::Result<Arc<dyn Platform>> {
+pub fn new_platform() -> anyhow::Result<Arc<dyn Platform>> {
     #[cfg(target_os="windows")]
     {
-        Ok(Arc::new(windows::WindowsPlatform::new()?))
+        Ok(Arc::new_cyclic(|weak| windows::WindowsPlatform::new(weak.clone()).expect("windows platform initialization failed")))
     }
 
     #[cfg(target_os="linux")]
     {
-        Ok(Arc::new(x11::X11Platform::new()?))
+        Ok(Arc::new(x11::X11Platform::new(window_manager)?))
     }
 
     #[cfg(not(any(target_os="windows", target_os="linux")))]

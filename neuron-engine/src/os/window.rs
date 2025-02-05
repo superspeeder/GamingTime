@@ -26,8 +26,8 @@ pub struct WindowAttributes {
     /// Position of the window (default is platform-dependent)
     pub position: Option<WindowPosition>,
 
-    /// Does the window have a close button?
-    pub has_close_button: bool, // = true
+    /// Can the user close the window?
+    pub allow_close: bool, // = true
 
     /// Does the window have a minimize button?
     pub has_minimize_button: bool, // = true
@@ -69,7 +69,7 @@ impl Default for WindowAttributes {
             title: None,
             size: None,
             position: None,
-            has_close_button: true,
+            allow_close: true,
             has_minimize_button: true,
             has_maximize_button: true,
             show_drop_shadow: false,
@@ -97,13 +97,14 @@ pub enum Resolution<T> {
     Logical { width: T, height: T },
 }
 
+
 impl<T> Copy for Resolution<T> where T: Copy + Clone {}
 
 /// Window position
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub struct WindowPosition {
-    x: i32,
-    y: i32,
+    pub x: i32,
+    pub y: i32,
 }
 
 /// Information about which window attributes are available
@@ -159,7 +160,7 @@ impl WindowManager {
     pub fn create_window(
         &self,
         window_attributes: WindowAttributes,
-        platform: Arc<dyn Platform>,
+        platform: &Arc<dyn Platform>,
     ) -> anyhow::Result<(WindowId, Weak<dyn Window>)> {
         let id = WindowId(self.window_id_counter.fetch_add(1, Ordering::SeqCst));
 
