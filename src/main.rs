@@ -1,6 +1,7 @@
+use anyhow::anyhow;
 use log::info;
-use neuron_engine::Engine;
 use neuron_engine::os::window::WindowAttributes;
+use neuron_engine::{Engine, ExitState};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -23,7 +24,12 @@ fn main() -> anyhow::Result<()> {
     info!("Window ID: {:?}", window_id);
 
     while engine.window_manager().is_window_alive(window_id) {
-        engine.process_events();
+        match engine.process_events() {
+            ExitState::Running => (),
+            ExitState::ExitSuccess => return Ok(()),
+            ExitState::ExitError(e) => return Err(e),
+            ExitState::ExitErrorGeneric => return Err(anyhow!("Unknown error")),
+        }
     }
 
     Ok(())

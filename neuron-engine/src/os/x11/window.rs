@@ -1,4 +1,4 @@
-use std::ffi::c_ulong;
+use std::ffi::{c_ulong, CStr, CString};
 use crate::os::window::{Resolution, Window, WindowAttributes, WindowId};
 use crate::os::x11::X11Platform;
 use raw_window_handle::{
@@ -90,6 +90,10 @@ impl X11Window {
                 cw_mask,
                 &mut swa,
             );
+
+            let title = CString::new(window_attributes.title.unwrap_or_else(|| "Window".to_string()))?;
+
+            (platform.xlib.XStoreName)(platform.display, window, title.as_ptr());
 
             #[allow(invalid_value)]
             let mut size_hints = MaybeUninit::<XSizeHints>::uninit().assume_init();

@@ -77,7 +77,7 @@ impl ExitManager {
         }
     }
 
-    fn should_exit(&self) -> bool {
+    pub fn should_exit(&self) -> bool {
         let value = self.exit_state.read();
         if let Ok(value) = value {
             match &*value {
