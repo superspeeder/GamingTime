@@ -20,10 +20,9 @@ pub(super) struct WindowsWindow {
     reference_block: Box<WindowReferenceBlock>,
 }
 
-struct WindowReferenceBlock {
-    id: WindowId,
-
-    platform: Arc<WindowsPlatform>,
+pub(super) struct WindowReferenceBlock {
+    pub id: WindowId,
+    pub platform: Arc<WindowsPlatform>,
 }
 
 impl HasWindowHandle for WindowsWindow {

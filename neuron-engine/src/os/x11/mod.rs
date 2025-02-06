@@ -180,7 +180,5 @@ impl super::Platform for X11Platform {
                 }
             }
         }
-
-        inputs.window_manager.update();
     }
 }

@@ -11,6 +11,7 @@ mod windows;
 use crate::os::window::{SupportedWindowAttributes, Window, WindowAttributes, WindowId, WindowManager};
 use raw_window_handle::HasDisplayHandle;
 use std::sync::Arc;
+use crate::ExitManager;
 
 /// Generic access to platform specific functions.
 /// Also requires [`raw_window_handle::HasDisplayHandle`] to be implemented.
@@ -97,4 +98,5 @@ pub fn new_platform() -> anyhow::Result<Arc<dyn Platform>> {
 
 pub(super) struct OsLoopInputs {
     pub window_manager: Arc<WindowManager>,
+    pub exit_manager: Arc<ExitManager>,
 }

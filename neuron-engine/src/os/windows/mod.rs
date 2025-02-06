@@ -2,9 +2,10 @@
 
 mod window;
 
+use crate::ExitState;
 use crate::os::window::{SupportedWindowAttributes, Window, WindowAttributes, WindowId};
-use crate::os::windows::window::WindowsWindow;
-use crate::os::{Platform, PlatformKind};
+use crate::os::windows::window::{WindowReferenceBlock, WindowsWindow};
+use crate::os::{OsLoopInputs, Platform, PlatformKind};
 use hashbrown::{HashMap, HashSet};
 use log::debug;
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle};
@@ -18,9 +19,11 @@ use windows::UI::ViewManagement::{UIColorType, UISettings};
 use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{CreateSolidBrush, DeleteObject, HBRUSH};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::WindowsAndMessaging::{CS_HREDRAW, CS_NOCLOSE, CS_VREDRAW, DefWindowProcW, RegisterClassExW, UnregisterClassW, WNDCLASS_STYLES, WNDCLASSEXW, WS_OVERLAPPEDWINDOW, CS_DROPSHADOW};
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+};
+use windows::Win32::UI::WindowsAndMessaging::{CREATESTRUCTW, CS_DROPSHADOW, CS_HREDRAW, CS_NOCLOSE, CS_VREDRAW, DefWindowProcW, DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, RegisterClassExW, TranslateMessage, UnregisterClassW, WM_CREATE, WM_QUIT, WNDCLASS_STYLES, WNDCLASSEXW, WS_OVERLAPPEDWINDOW, GWLP_USERDATA, SetWindowLongPtrW, GetWindowLongPtrW, WM_DESTROY};
 use windows::core::PCWSTR;
-use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 
 pub(super) struct WindowsPlatform {
     hinstance: HINSTANCE,
@@ -178,6 +181,22 @@ impl Platform for WindowsPlatform {
             window_id,
         )?))
     }
+
+    fn process_events(&self, inputs: &OsLoopInputs) {
+        unsafe {
+            #[allow(invalid_value)]
+            let mut msg = MaybeUninit::<MSG>::uninit().assume_init();
+
+            while PeekMessageW(&mut msg, HWND::default(), 0, 0, PM_REMOVE).0 > 0 {
+                if msg.message == WM_QUIT {
+                    inputs.exit_manager.set(ExitState::ExitSuccess);
+                }
+
+                _ = DispatchMessageW(&msg);
+                _ = TranslateMessage(&msg);
+            }
+        }
+    }
 }
 
 impl Drop for WindowsPlatform {
@@ -220,5 +239,30 @@ unsafe extern "system" fn generic_window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    let wptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    if wptr != 0 {
+        let reference_block = wptr as *const WindowReferenceBlock;
+        if let Some(block) = reference_block.as_ref() {
+            match message {
+                WM_DESTROY => {
+                    todo!("Find a way to pass the OsLoopInputs data to this function from the processing function. Not sure how just yet but will find a way (maybe setting it at the start of each loop on every living window's reference block).");
+                },
+                _ => ()
+            }
+
+
+        }
+    }
+
+    match message {
+        WM_CREATE => {
+            let cs = lparam.0 as *const CREATESTRUCTW;
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, (*cs).lpCreateParams as isize);
+
+            return LRESULT(0);
+        }
+        _ => ()
+    }
+
     DefWindowProcW(hwnd, message, wparam, lparam)
 }
