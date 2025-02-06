@@ -2,26 +2,38 @@
 
 #![cfg(target_os = "linux")]
 
-use crate::os::PlatformKind;
-use crate::os::window::SupportedWindowAttributes;
+mod window;
+
+use crate::os::window::{SupportedWindowAttributes, Window, WindowAttributes, WindowId};
+use crate::os::x11::window::X11Window;
+use crate::os::{OsLoopInputs, PlatformKind};
 use anyhow::bail;
+use hashbrown::HashMap;
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, XlibDisplayHandle,
 };
-use std::ffi::c_void;
+use std::cell::RefCell;
+use std::ffi::{CStr, c_long, c_ulong, c_void};
+use std::mem::MaybeUninit;
 use std::ptr::NonNull;
+use std::sync::{Arc, Weak};
+use log::debug;
 use x11_dl::xlib;
-use x11_dl::xlib::Xlib;
+use x11_dl::xlib::{XEvent, Xlib};
 
 pub(super) struct X11Platform {
-    xlib: Xlib,
-    display: *mut xlib::Display,
-    default_screen: i32,
-    root_window: xlib::Window,
+    pub(self) xlib: Xlib,
+    pub(self) display: *mut xlib::Display,
+    pub(self) default_screen: i32,
+    pub(self) root_window: xlib::Window,
+    pub(self) xa_wm_delete_window: xlib::Atom,
+    pub(self) xa_wm_protocols: xlib::Atom,
+    window_map: RefCell<HashMap<xlib::Window, WindowId>>,
+    weak: Weak<X11Platform>,
 }
 
 impl X11Platform {
-    pub fn new() -> anyhow::Result<X11Platform> {
+    pub fn new(weak: Weak<X11Platform>) -> anyhow::Result<X11Platform> {
         let xlib = Xlib::open()?;
         let display = unsafe { (xlib.XOpenDisplay)(std::ptr::null()) };
 
@@ -33,11 +45,23 @@ impl X11Platform {
 
         let root_window = unsafe { (xlib.XRootWindow)(display, default_screen) };
 
+        let xa_wm_delete_window_name = CStr::from_bytes_with_nul(b"WM_DELETE_WINDOW\0")?;
+        let xa_wm_protocols_name = CStr::from_bytes_with_nul(b"WM_PROTOCOLS\0")?;
+
+        let xa_wm_delete_window =
+            unsafe { (xlib.XInternAtom)(display, xa_wm_delete_window_name.as_ptr(), xlib::False) };
+        let xa_wm_protocols =
+            unsafe { (xlib.XInternAtom)(display, xa_wm_protocols_name.as_ptr(), xlib::False) };
+
         Ok(X11Platform {
             xlib,
             display,
             default_screen,
             root_window,
+            xa_wm_delete_window,
+            xa_wm_protocols,
+            weak,
+            window_map: RefCell::new(HashMap::new()),
         })
     }
 
@@ -51,6 +75,10 @@ impl X11Platform {
 
     pub fn root_window(&self) -> xlib::Window {
         self.root_window
+    }
+
+    pub fn notify_window_destroy(&self, window: xlib::Window) {
+        self.window_map.borrow_mut().remove(&window);
     }
 }
 
@@ -110,5 +138,49 @@ impl super::Platform for X11Platform {
             has_system_menu: false,
             initially_visible: true,
         }
+    }
+
+    fn create_window(
+        &self,
+        window_attributes: WindowAttributes,
+        window_id: WindowId,
+    ) -> anyhow::Result<Arc<dyn Window>> {
+        let win = Arc::new(X11Window::new(
+            self.weak.upgrade().unwrap(),
+            window_attributes,
+            window_id,
+        )?);
+        self.window_map.borrow_mut().insert(win.window, window_id);
+        Ok(win)
+    }
+
+    fn process_events(&self, inputs: &OsLoopInputs) {
+        #[allow(invalid_value)]
+        let mut event = unsafe { MaybeUninit::<XEvent>::uninit().assume_init() };
+
+        unsafe {
+            while (self.xlib.XPending)(self.display) > 0 {
+                (self.xlib.XNextEvent)(self.display, &mut event);
+
+                match event.type_ {
+                    xlib::ClientMessage => {
+                        if event.client_message.message_type == self.xa_wm_protocols
+                            && event.client_message.format == 32
+                        {
+                            if event.client_message.data.as_longs()[0]
+                                == (self.xa_wm_delete_window as c_long)
+                            {
+                                if let Some(wid) = self.window_map.borrow().get(&event.any.window) {
+                                    inputs.window_manager.begin_closing_window(wid.clone());
+                                }
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        inputs.window_manager.update();
     }
 }

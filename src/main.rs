@@ -1,17 +1,30 @@
 use log::info;
+use neuron_engine::Engine;
+use neuron_engine::os::window::WindowAttributes;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let platform = neuron_engine::os::new_platform()?;
+    let engine = Engine::new()?;
 
-    info!("Platform:  {}", platform.name());
-    info!("Headless:  {:?}", platform.is_headless());
-    info!("Dark Mode: {:?}", platform.is_dark_mode());
+    info!("Platform:  {}", engine.platform().name());
+    info!("Headless:  {:?}", engine.platform().is_headless());
+    info!("Dark Mode: {:?}", engine.platform().is_dark_mode());
     info!(
         "Supported Window Attributes: {:?}",
-        platform.supported_window_attributes()
+        engine.platform().supported_window_attributes()
     );
+
+    let (window_id, window) = engine.create_window(WindowAttributes {
+        title: Some("Hello!".to_string()),
+        ..Default::default()
+    })?;
+
+    info!("Window ID: {:?}", window_id);
+
+    while engine.window_manager().is_window_alive(window_id) {
+        engine.process_events();
+    }
 
     Ok(())
 }

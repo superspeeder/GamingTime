@@ -47,6 +47,9 @@ pub trait Platform: HasDisplayHandle {
     fn supported_window_attributes(&self) -> &'static SupportedWindowAttributes;
 
     fn create_window(&self, window_attributes: WindowAttributes, window_id: WindowId) -> anyhow::Result<Arc<dyn Window>>;
+
+    /// Process OS events (most operating systems have some sort of event polling loop that we have to run to actually handle those events, otherwise the window will stop responding).
+    fn process_events(&self, inputs: &OsLoopInputs);
 }
 
 /// Identifier for platforms.
@@ -83,11 +86,15 @@ pub fn new_platform() -> anyhow::Result<Arc<dyn Platform>> {
 
     #[cfg(target_os="linux")]
     {
-        Ok(Arc::new(x11::X11Platform::new(window_manager)?))
+        Ok(Arc::new_cyclic(|weak| x11::X11Platform::new(weak.clone()).expect("X11 platform initialization failed")))
     }
 
     #[cfg(not(any(target_os="windows", target_os="linux")))]
     {
         unimplemented!("This platform is not supported")
     }
+}
+
+pub(super) struct OsLoopInputs {
+    pub window_manager: Arc<WindowManager>,
 }

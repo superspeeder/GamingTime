@@ -177,6 +177,14 @@ impl WindowManager {
     pub fn begin_closing_window(&self, id: WindowId) {
         self.window_sets.borrow_mut().active_windows.remove(&id);
         self.window_sets.borrow_mut().dying_windows.insert(id);
+        debug!("Beginning process for closing window: {:?}", id);
+    }
+
+    pub fn update(&self) {
+        let window_ids = self.window_sets.borrow().dying_windows.iter().cloned().collect::<Vec<_>>();
+        for window_id in window_ids {
+            self.try_finish_closing_window(window_id);
+        }
     }
 
     pub fn try_finish_closing_window(&self, id: WindowId) -> bool {
@@ -195,6 +203,8 @@ impl WindowManager {
 
             self.window_sets.borrow_mut().dying_windows.remove(&id);
             self.window_sets.borrow_mut().windows.remove(&id);
+
+            debug!("Finished process for closing window: {:?}", id);
         }
 
         true
